@@ -1,0 +1,6 @@
+{
+  "name": "Doomsday Advisor",
+  "description": "Tactical planetary threat telemetry, Kardashev scale civilization ascension gauge, real-time extinction probability, and natural catastrophe monitoring command center.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
