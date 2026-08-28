@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AsteroidObject, MonitoringFeedItem } from '../../types';
 
 interface AsteroidsViewProps {
@@ -33,6 +33,40 @@ export const AsteroidsView: React.FC<AsteroidsViewProps> = ({
   const [simulationSpeed, setSimulationSpeed] = useState<number>(1);
   const [tableSearch, setTableSearch] = useState<string>('');
   const [threatFilter, setThreatFilter] = useState<string>('ALL');
+
+  // Dynamic Radar & Orbital Trajectory Animation State
+  const [sweepAngle, setSweepAngle] = useState<number>(0);
+  const [simulatedHours, setSimulatedHours] = useState<number>(0);
+  const animFrameRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number>(performance.now());
+  const speedRef = useRef<number>(simulationSpeed);
+  speedRef.current = simulationSpeed;
+
+  useEffect(() => {
+    lastTimeRef.current = performance.now();
+    const animate = (time: number) => {
+      const deltaMs = Math.min(100, time - lastTimeRef.current);
+      lastTimeRef.current = time;
+
+      const currentSpeed = speedRef.current;
+      // 1x = 6 seconds per rotation (60 deg/sec)
+      const degPerMs = (360 / 6000) * currentSpeed;
+      setSweepAngle((prev) => (prev + degPerMs * deltaMs) % 360);
+
+      // Trajectory time advance: 1x = 0.5 simulated hour/sec
+      const hoursPerMs = (0.5 / 1000) * currentSpeed;
+      setSimulatedHours((prev) => (prev + hoursPerMs * deltaMs) % 720);
+
+      animFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    animFrameRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+      }
+    };
+  }, []);
 
   const [inputStartDate, setInputStartDate] = useState<string>(startDate);
   const [inputEndDate, setInputEndDate] = useState<string>(endDate);
@@ -290,23 +324,24 @@ export const AsteroidsView: React.FC<AsteroidsViewProps> = ({
       {/* Main Radar & Live Monitoring Feeds */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
         {/* Orbital Path Simulator & Radar */}
-        <div className="col-span-12 lg:col-span-8 bg-[#000000] p-6 flex flex-col justify-between relative overflow-hidden border border-[#2C2E33] min-h-[460px]">
-          <div className="flex justify-between items-center z-10">
+        <div className="col-span-12 lg:col-span-8 bg-[#000000] p-4 sm:p-6 flex flex-col justify-between relative overflow-hidden border border-[#2C2E33] min-h-[490px]">
+          {/* Header & Controls Toolbar */}
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 z-10 border-b border-[#2C2E33] pb-3">
             <div className="flex items-center gap-3">
               <span className="material-symbols-outlined text-[#00F2FF]">
                 radar
               </span>
-              <span className="font-headline font-bold text-[18px] text-[#e2e2e2] uppercase tracking-wide">
+              <span className="font-headline font-bold text-[16px] sm:text-[18px] text-[#e2e2e2] uppercase tracking-wide">
                 Orbital Radar & Trajectory Projection
               </span>
             </div>
             
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <select
                 id="orbital-target-selector"
                 value={activeOrbitalTarget}
                 onChange={(e) => setActiveOrbitalTarget(e.target.value)}
-                className="bg-[#1f1f1f] border border-[#2C2E33] px-2 py-1 text-[11px] font-mono text-[#00F2FF] focus:border-[#00F2FF] outline-none cursor-pointer"
+                className="bg-[#1f1f1f] border border-[#2C2E33] px-2.5 py-1.5 text-[11px] font-mono text-[#00F2FF] focus:border-[#00F2FF] outline-none cursor-pointer max-w-[180px] sm:max-w-[220px] truncate"
               >
                 {asteroids.map((ast) => (
                   <option key={ast.objectId} value={ast.name}>
@@ -315,18 +350,18 @@ export const AsteroidsView: React.FC<AsteroidsViewProps> = ({
                 ))}
               </select>
 
-              <div className="flex items-center gap-1.5 bg-[#141414] border border-[#2C2E33] px-2 py-1 text-[11px] font-mono">
-                <span className="text-[9px] text-[#757575] uppercase hidden sm:inline tracking-wider font-bold">
+              <div className="flex items-center gap-1.5 bg-[#141414] border border-[#2C2E33] px-2 py-1 text-[11px] font-mono shrink-0">
+                <span className="text-[9px] text-[#757575] uppercase font-bold tracking-wider mr-0.5">
                   SWEEP:
                 </span>
                 <div className="flex items-center gap-1">
                   <button
                     id="btn-sweep-speed-1x"
                     onClick={() => setSimulationSpeed(1)}
-                    title="Real-time standard radar sweep (1×)"
-                    className={`px-2 py-0.5 text-[10px] font-bold border transition-colors cursor-pointer ${
+                    title="Real-time standard radar sweep & orbital velocity (1×)"
+                    className={`px-2.5 py-1 text-[10px] font-bold border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                       simulationSpeed === 1
-                        ? 'bg-[#00F2FF] border-[#00F2FF] text-black'
+                        ? 'bg-[#00F2FF] border-[#00F2FF] text-black shadow-[0_0_8px_rgba(0,242,255,0.6)]'
                         : 'bg-[#1f1f1f] border-[#2C2E33] text-[#cfc4c5] hover:text-white'
                     }`}
                   >
@@ -335,10 +370,10 @@ export const AsteroidsView: React.FC<AsteroidsViewProps> = ({
                   <button
                     id="btn-sweep-speed-5x"
                     onClick={() => setSimulationSpeed(5)}
-                    title="Accelerated orbital projection (5×)"
-                    className={`px-2 py-0.5 text-[10px] font-bold border transition-colors cursor-pointer ${
+                    title="Accelerated orbital trajectory projection (5×)"
+                    className={`px-2.5 py-1 text-[10px] font-bold border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                       simulationSpeed === 5
-                        ? 'bg-[#00F2FF] border-[#00F2FF] text-black'
+                        ? 'bg-[#00F2FF] border-[#00F2FF] text-black shadow-[0_0_8px_rgba(0,242,255,0.6)]'
                         : 'bg-[#1f1f1f] border-[#2C2E33] text-[#cfc4c5] hover:text-white'
                     }`}
                   >
@@ -347,10 +382,10 @@ export const AsteroidsView: React.FC<AsteroidsViewProps> = ({
                   <button
                     id="btn-sweep-speed-20x"
                     onClick={() => setSimulationSpeed(20)}
-                    title="High-speed time-lapse simulation (20×)"
-                    className={`px-2 py-0.5 text-[10px] font-bold border transition-colors cursor-pointer ${
+                    title="High-speed time-lapse simulation & intercept projection (20×)"
+                    className={`px-2.5 py-1 text-[10px] font-bold border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                       simulationSpeed === 20
-                        ? 'bg-[#00F2FF] border-[#00F2FF] text-black'
+                        ? 'bg-[#00F2FF] border-[#00F2FF] text-black shadow-[0_0_8px_rgba(0,242,255,0.6)]'
                         : 'bg-[#1f1f1f] border-[#2C2E33] text-[#cfc4c5] hover:text-white'
                     }`}
                   >
@@ -361,44 +396,83 @@ export const AsteroidsView: React.FC<AsteroidsViewProps> = ({
             </div>
           </div>
 
-          {/* Interactive CSS / Canvas Radar Visual */}
-          <div className="relative w-full h-72 my-4 flex items-center justify-center">
-            {/* Concentric Radar Range Rings */}
-            <div className="absolute w-64 h-64 rounded-full border border-[#2C2E33] animate-[spin_40s_linear_infinite]"></div>
-            <div className="absolute w-48 h-48 rounded-full border border-[#2C2E33]/70"></div>
-            <div className="absolute w-32 h-32 rounded-full border border-[#00F2FF]/30"></div>
-            <div className="absolute w-16 h-16 rounded-full border border-[#FF3B30]/40"></div>
+          {/* Interactive Animated SVG / Canvas Radar Visual */}
+          <div className="relative w-full h-80 my-2 flex items-center justify-center overflow-hidden">
+            {/* Grid coordinate markings */}
+            <div className="absolute inset-0 bg-[radial-gradient(#2C2E33_1px,transparent_1px)] [background-size:24px_24px] opacity-30 pointer-events-none" />
 
-            {/* Radar Crosshairs */}
-            <div className="absolute w-full h-px bg-[#2C2E33]"></div>
-            <div className="absolute h-full w-px bg-[#2C2E33]"></div>
+            {/* Concentric Radar Range Rings & AU scale labels */}
+            <div className="absolute w-[290px] h-[290px] rounded-full border border-[#2C2E33]/60">
+              <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[8px] font-mono text-[#757575]">0.25 AU</span>
+            </div>
+            <div className="absolute w-[220px] h-[220px] rounded-full border border-[#2C2E33]/80">
+              <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[8px] font-mono text-[#757575]">0.15 AU</span>
+            </div>
+            <div className="absolute w-[150px] h-[150px] rounded-full border border-[#00F2FF]/25">
+              <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[8px] font-mono text-[#00F2FF]/60">0.05 AU (LD 20)</span>
+            </div>
+            <div className="absolute w-[75px] h-[75px] rounded-full border border-[#FF3B30]/30 animate-pulse">
+              <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[8px] font-mono text-[#FF3B30]/80">PROXIMITY</span>
+            </div>
 
-            {/* Radar Rotating Sweep Line */}
+            {/* Radar Axis Crosshairs */}
+            <div className="absolute w-full h-px bg-[#2C2E33]/80"></div>
+            <div className="absolute h-full w-px bg-[#2C2E33]/80"></div>
+
+            {/* SVG Orbital Trajectories */}
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="-180 -180 360 360">
+              {/* Elliptical Orbits */}
+              <ellipse cx="0" cy="0" rx="135" ry="115" fill="none" stroke="#2C2E33" strokeDasharray="3 4" strokeWidth="1" transform="rotate(-25)" />
+              <ellipse cx="0" cy="0" rx="100" ry="85" fill="none" stroke="#00F2FF" strokeOpacity="0.2" strokeDasharray="2 3" strokeWidth="1" transform="rotate(15)" />
+              <ellipse cx="0" cy="0" rx="65" ry="55" fill="none" stroke="#FFCC00" strokeOpacity="0.3" strokeDasharray="3 3" strokeWidth="1" transform="rotate(40)" />
+
+              {/* Target Intercept Vector */}
+              <line x1="0" y1="0" x2="60" y2="-45" stroke="#FF3B30" strokeOpacity="0.4" strokeDasharray="2 2" strokeWidth="1.5" />
+            </svg>
+
+            {/* Rotating Radar Sweep Beam */}
             <div
-              className="absolute w-32 h-32 origin-bottom-right top-1/2 left-1/2 -mt-32 -ml-32 pointer-events-none"
+              className="absolute w-[160px] h-[160px] origin-bottom-right top-1/2 left-1/2 -mt-[160px] -ml-[160px] pointer-events-none"
               style={{
-                background: 'conic-gradient(from 0deg, rgba(0,242,255,0.25) 0deg, transparent 60deg)',
-                animation: `spin ${6 / simulationSpeed}s linear infinite`,
+                transform: `rotate(${sweepAngle}deg)`,
+                background: 'conic-gradient(from 0deg, rgba(0,242,255,0.35) 0deg, rgba(0,242,255,0.08) 35deg, transparent 65deg)',
                 borderRadius: '100% 0 0 0',
               }}
-            ></div>
+            >
+              {/* High-intensity sweep leading edge */}
+              <div className="absolute bottom-0 right-0 w-[160px] h-0.5 bg-gradient-to-l from-[#00F2FF] to-transparent origin-bottom-right" />
+            </div>
 
             {/* Center Earth Node */}
             <div className="relative z-10 flex flex-col items-center">
-              <div className="w-5 h-5 rounded-full bg-[#00F2FF] shadow-[0_0_15px_#00F2FF] flex items-center justify-center text-[8px] font-bold text-black">
+              <div className="w-6 h-6 rounded-full bg-[#00F2FF] shadow-[0_0_16px_#00F2FF] flex items-center justify-center text-[9px] font-bold text-black border border-white">
                 ⊕
               </div>
-              <span className="text-[9px] font-mono text-[#00F2FF] font-bold mt-1">
+              <span className="text-[9px] font-mono text-[#00F2FF] font-bold mt-1 bg-black/80 px-1 border border-[#00F2FF]/30">
                 TERRA (1.00 AU)
               </span>
             </div>
 
-            {/* Simulated Asteroid Target Positions */}
-            {asteroids.slice(0, 5).map((ast, idx) => {
-              const angles = [45, 130, 210, 300, 80];
-              const radii = [45, 75, 105, 60, 95];
-              const angle = angles[idx % angles.length];
+            {/* Dynamic Asteroid Target Positions and Orbital Motion */}
+            {asteroids.slice(0, 6).map((ast, idx) => {
+              const baseAngles = [45, 125, 205, 280, 95, 340];
+              const radii = [42, 68, 102, 128, 85, 115];
+              const speeds = [0.8, -0.6, 1.1, -0.9, 1.4, -0.7]; // orbital velocity multipliers
+              
               const radius = radii[idx % radii.length];
+              const baseAngle = baseAngles[idx % baseAngles.length];
+              const speedMult = speeds[idx % speeds.length];
+              
+              // Dynamic current position based on simulation clock
+              const currentAngle = (baseAngle + simulatedHours * speedMult * 12) % 360;
+              const rad = (currentAngle * Math.PI) / 180;
+              const posX = Math.cos(rad) * radius;
+              const posY = Math.sin(rad) * radius;
+
+              // Check if radar sweep just passed this angle (angular difference)
+              const diffAngle = ((sweepAngle - (currentAngle < 0 ? currentAngle + 360 : currentAngle)) + 360) % 360;
+              const isIlluminated = diffAngle < 35;
+
               const isSelected = ast.name === currentTargetObj.name;
 
               return (
@@ -408,26 +482,58 @@ export const AsteroidsView: React.FC<AsteroidsViewProps> = ({
                     setActiveOrbitalTarget(ast.name);
                     onSelectAsteroid(ast);
                   }}
-                  className="absolute cursor-pointer group flex flex-col items-center z-20"
+                  className="absolute cursor-pointer group flex flex-col items-center z-20 transition-transform duration-75"
                   style={{
-                    transform: `rotate(${angle}deg) translate(${radius}px) rotate(-${angle}deg)`,
+                    transform: `translate(${posX}px, ${posY}px)`,
                   }}
                 >
+                  {/* Radar Phosphor Ping Flash */}
+                  {isIlluminated && (
+                    <div
+                      className={`w-6 h-6 rounded-full absolute -inset-1.5 animate-ping ${
+                        isSelected
+                          ? 'bg-[#FF3B30]/60'
+                          : ast.hazardous
+                          ? 'bg-[#FFCC00]/50'
+                          : 'bg-[#00F2FF]/50'
+                      }`}
+                    />
+                  )}
+
+                  {/* Target Node */}
                   <div
-                    className={`w-3 h-3 rounded-full flex items-center justify-center transition-all ${
+                    className={`w-3.5 h-3.5 rounded-full flex items-center justify-center transition-all ${
                       isSelected
-                        ? 'bg-[#FF3B30] ring-4 ring-[#FF3B30]/40 scale-125'
+                        ? 'bg-[#FF3B30] ring-4 ring-[#FF3B30]/40 scale-125 shadow-[0_0_12px_#FF3B30]'
                         : ast.hazardous
-                        ? 'bg-[#FFCC00] animate-pulse'
+                        ? 'bg-[#FFCC00] shadow-[0_0_8px_#FFCC00]'
                         : 'bg-[#cfc4c5]'
-                    }`}
-                  ></div>
-                  <span className="text-[9px] font-mono text-[#e2e2e2] bg-[#0e0e0e]/90 px-1 border border-[#2C2E33] whitespace-nowrap mt-1 group-hover:text-[#00F2FF]">
+                    } ${isIlluminated ? 'brightness-150 scale-110' : 'brightness-100'}`}
+                  />
+
+                  {/* Label */}
+                  <span className={`text-[9px] font-mono bg-[#0e0e0e]/90 px-1 border whitespace-nowrap mt-1 transition-colors ${
+                    isSelected
+                      ? 'text-[#FF3B30] border-[#FF3B30]'
+                      : isIlluminated
+                      ? 'text-[#00F2FF] border-[#00F2FF]'
+                      : 'text-[#cfc4c5] border-[#2C2E33] group-hover:text-[#00F2FF]'
+                  }`}>
                     {ast.name.split(' ')[0]}
                   </span>
                 </div>
               );
             })}
+
+            {/* Active Sweep HUD telemetry indicator */}
+            <div className="absolute top-2 right-2 flex flex-col items-end gap-1 bg-black/70 border border-[#2C2E33] p-1.5 text-[9px] font-mono pointer-events-none">
+              <span className="text-[#00F2FF] font-bold">
+                SWEEP RATE: {simulationSpeed}× {simulationSpeed === 1 ? '(REAL)' : simulationSpeed === 5 ? '(WARP)' : '(TIME-LAPSE)'}
+              </span>
+              <span className="text-[#cfc4c5]">
+                ORBIT TIME: +{simulatedHours.toFixed(1)} hrs
+              </span>
+            </div>
           </div>
 
           {/* Bottom Telemetry Bar */}
@@ -460,7 +566,7 @@ export const AsteroidsView: React.FC<AsteroidsViewProps> = ({
         </div>
 
         {/* Live Feed Sidebar */}
-        <div className="col-span-12 lg:col-span-4 bg-[#1f1f1f] flex flex-col border border-[#2C2E33] max-h-[460px]">
+        <div className="col-span-12 lg:col-span-4 bg-[#1f1f1f] flex flex-col border border-[#2C2E33] max-h-[490px]">
           <div className="p-4 border-b border-[#2C2E33] bg-[#2a2a2a] flex justify-between items-center">
             <span className="font-headline font-bold text-[18px] text-[#e2e2e2] uppercase tracking-wide">
               MONITORING FEED
@@ -482,7 +588,7 @@ export const AsteroidsView: React.FC<AsteroidsViewProps> = ({
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-2 p-2">
+          <div className="flex-1 overflow-y-auto space-y-2 p-2 cursor-default">
             {filteredFeeds.map((feed) => {
               const borderClass =
                 feed.tagType === 'emergency'
@@ -505,7 +611,7 @@ export const AsteroidsView: React.FC<AsteroidsViewProps> = ({
               return (
                 <div
                   key={feed.id}
-                  className={`bg-[#131313] ${borderClass} p-3 flex flex-col gap-1 cursor-pointer hover:bg-[#1b1b1b] transition-colors relative overflow-hidden`}
+                  className={`bg-[#131313] ${borderClass} p-3 flex flex-col gap-1 cursor-default hover:bg-[#1b1b1b] transition-colors relative overflow-hidden`}
                 >
                   {feed.tagType === 'emergency' && (
                     <div className="absolute inset-0 bg-[#FF3B30]/5 pointer-events-none animate-pulse"></div>
@@ -520,10 +626,10 @@ export const AsteroidsView: React.FC<AsteroidsViewProps> = ({
                     </span>
                   </div>
 
-                  <span className="text-[13px] font-mono text-[#e2e2e2] leading-snug">
+                  <span className="text-[13px] font-mono text-[#e2e2e2] leading-snug select-text">
                     {feed.title}
                   </span>
-                  <span className="text-[10px] font-mono text-[#757575] mt-1">
+                  <span className="text-[10px] font-mono text-[#757575] mt-1 select-text">
                     {feed.detail}
                   </span>
                 </div>
